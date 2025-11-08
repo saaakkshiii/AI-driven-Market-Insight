@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Register — AI Market Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="bg-dark text-light">
+  <div class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-md-6 col-lg-4">
+        <div class="card p-4 shadow-lg bg-secondary text-white rounded-3">
+          <h3 class="text-center mb-3">Create Account</h3>
+
+          {% with messages = get_flashed_messages() %}
+            {% if messages %}
+              <div class="alert alert-info small text-center">{{ messages[0] }}</div>
+            {% endif %}
+          {% endwith %}
+
+          <form method="post" action="{{ url_for('register') }}">
+            <div class="mb-3">
+              <label class="form-label">Username</label>
+              <input name="username" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Password</label>
+              <input name="password" type="password" class="form-control" required>
+            </div>
+
+            <button class="btn btn-success w-100 mt-2">Register</button>
+          </form>
+
+          <p class="text-center mt-3">
+            <a href="{{ url_for('login') }}" class="text-light text-decoration-underline">Back to Login</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

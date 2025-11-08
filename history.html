@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>My Prediction History — AI Market Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .tiny { font-size: 0.85rem; color: #9fb0c8; }
+    .table-fit td, .table-fit th { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h3 class="app-title">My Predictions</h3>
+        <div class="tiny">Saved predictions tied to your account</div>
+      </div>
+      <div>
+        <a class="btn btn-sm btn-outline-light me-2" href="/">Back</a>
+        <a class="btn btn-sm btn-outline-light" href="/export_history">Export CSV</a>
+      </div>
+    </div>
+
+    <div class="card p-3 mb-3">
+      {% if rows and rows|length > 0 %}
+        <div class="table-responsive">
+          <table class="table table-striped table-fit">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Company</th>
+                <th>Inputs</th>
+                <th class="text-end">Linear Reg.</th>
+                <th class="text-end">SVR</th>
+                <th class="text-end">GBR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+                <tr>
+                  <td class="tiny">{{ (r.timestamp or '')[:19] }}</td>
+                  <td><strong>{{ r.company }}</strong></td>
+                  <td class="tiny">R&D: {{ r.rd }} • Rev: {{ r.revenue }} • Growth: {{ r.growth }}%</td>
+                  <td class="text-end">{{ "%.4f"|format(r.lr_pred or 0) }}</td>
+                  <td class="text-end">{{ "%.4f"|format(r.svr_pred or 0) }}</td>
+                  <td class="text-end">{{ "%.4f"|format(r.gbr_pred or 0) }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="p-4 text-center muted">
+          You have no saved predictions yet. Make a prediction from the <a href="/">dashboard</a>.
+        </div>
+      {% endif %}
+    </div>
+
+    <footer class="text-center muted small">
+      Tip: use Export CSV to download your predictions.
+    </footer>
+  </div>
+</body>
+</html>

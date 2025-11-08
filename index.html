@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AI Market Dashboard</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Theme stylesheet (starts in dark by default) -->
+  <link id="theme-link" rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* small inline fallbacks so page won't be empty if style.css missing */
+    body { background:#07102a; color:#e6eef7; font-family: "Segoe UI", Arial, sans-serif; padding:18px; }
+    .muted{ color:#9fb0c8; }
+  </style>
+</head>
+<body>
+  <div class="container py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h1 class="app-title">AI Market Dashboard</h1>
+        <div class="muted">Model comparison with history & diagnostics</div>
+      </div>
+      <div class="d-flex gap-2 align-items-center">
+        <button id="toggle-theme" class="btn btn-sm btn-outline-light">Toggle Light/Dark</button>
+        <a class="btn btn-sm btn-outline-light" href="/history">My History</a>
+        <a class="btn btn-sm btn-outline-light" href="/diagnostics">Diagnostics</a>
+        <a class="btn btn-sm btn-outline-light" href="/export_history">Export CSV</a>
+        <a class="btn btn-sm btn-outline-light" href="/logout">Logout</a>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <!-- Left column: inputs + prediction -->
+      <div class="col-lg-6">
+        <div class="card p-3 mb-3">
+          <h5>Predict Stock Impact (%)</h5>
+          <form method="post" id="predict-form">
+            <div class="mb-2">
+              <label>R&D Spending (USD Mn)</label>
+              <input name="rd" type="number" step="0.01" class="form-control" required>
+            </div>
+            <div class="mb-2">
+              <label>AI Revenue (USD Mn)</label>
+              <input name="revenue" type="number" step="0.01" class="form-control" required>
+            </div>
+            <div class="mb-2">
+              <label>AI Growth (%)</label>
+              <input name="growth" type="number" step="0.01" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label>Company</label>
+              <select name="company" class="form-select" required>
+                <option value="">Select</option>
+                {% for c in companies %}
+                  <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="d-grid">
+              <button type="submit" class="btn btn-primary btn-lg">Compare Models</button>
+            </div>
+          </form>
+        </div>
+
+        {% if result_dict %}
+        <div class="card p-3 mb-3">
+          <div class="d-flex justify-content-between">
+            <h6 class="mb-0">Predictions</h6>
+            <small class="muted">Best: <strong>{{ best_model or '—' }}</strong></small>
+          </div>
+
+          <table class="table mt-2">
+            <thead><tr><th>Model</th><th class="text-end">Prediction</th></tr></thead>
+            <tbody>
+              {% for k,v in result_dict.items() %}
+                <tr {% if k==best_model %}class="table-success"{% endif %}>
+                  <td>{{ k }}</td>
+                  <td class="text-end">{{ v }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card p-3 mb-3">
+          <h6 class="mb-2">Prediction Comparison</h6>
+          <canvas id="predChart" height="120"></canvas>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Right column: historical trend + recent predictions -->
+      <div class="col-lg-6">
+        <div class="card p-3 mb-3">
+          <h6>Historical Trend View</h6>
+
+          <div class="mb-2">
+            <select id="hist-company" class="form-select">
+              <option value="">Select company to view history</option>
+            </select>
+          </div>
+
+          <canvas id="histChart" height="220"></canvas>
+        </div>
+
+        <div class="card p-3">
+          <h6>Recent Predictions (you)</h6>
+          {% if recent %}
+            <ul class="list-group list-group-flush">
+              {% for r in recent %}
+                <li class="list-group-item bg-transparent small">
+                  <div class="d-flex justify-content-between">
+                    <div><strong>{{ r.company }}</strong></div>
+                    <div class="muted">{{ (r.timestamp or '')[:19] }}</div>
+                  </div>
+                  <div class="muted">LR: {{ r.lr_pred }} · SVR: {{ r.svr_pred }} · GBR: {{ r.gbr_pred }}</div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">No recent predictions yet.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Scripts -->
+  <script>
+    // ---------- Theme toggle ----------
+    (function () {
+      const themeLink = document.getElementById('theme-link');
+      const toggleBtn = document.getElementById('toggle-theme');
+      // URLs generated by Flask template engine
+      const darkHref = "{{ url_for('static', filename='style.css') }}";
+      const lightHref = "{{ url_for('static', filename='light_theme.css') }}";
+
+      // get saved theme
+      const saved = localStorage.getItem('theme') || 'dark';
+      if (saved === 'light') themeLink.href = lightHref;
+      else themeLink.href = darkHref;
+
+      toggleBtn.addEventListener('click', () => {
+        try {
+          if (themeLink.href.endsWith('light_theme.css')) {
+            themeLink.href = darkHref;
+            localStorage.setItem('theme', 'dark');
+          } else {
+            themeLink.href = lightHref;
+            localStorage.setItem('theme', 'light');
+          }
+        } catch (e) {
+          console.error('Theme toggle error', e);
+        }
+      });
+    })();
+
+    // ---------- Prediction chart (if server provided results) ----------
+    (function () {
+      try {
+        {% if result_dict %}
+          const labels = {{ result_dict.keys()|list|tojson }};
+          const data = {{ result_dict.values()|list|tojson }};
+          const ctx = document.getElementById('predChart');
+          if (ctx) {
+            new Chart(ctx, {
+              type: 'bar',
+              data: { labels: labels, datasets: [{ label: 'Predicted Impact (%)', data: data, backgroundColor: ['#0b74de','#37a2eb','#9bd8ff'], borderRadius: 6 }]},
+              options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+          }
+        {% endif %}
+      } catch (err) {
+        console.error("Prediction chart error:", err);
+      }
+    })();
+
+    // ---------- Historical trend fetch + render ----------
+    (function () {
+      const compSelect = document.getElementById('hist-company');
+      const histCanvas = document.getElementById('histChart');
+      let histChart = null;
+
+      // Helper to safely parse dataset field names that include %
+      function safeSeries(obj, key) {
+        return (obj && Object.prototype.hasOwnProperty.call(obj, key)) ? obj[key] : [];
+      }
+
+      // load company list
+      fetch('/historical_data')
+        .then(r => r.json())
+        .then(j => {
+          if (j && j.companies && Array.isArray(j.companies)) {
+            j.companies.forEach(c => {
+              const o = document.createElement('option');
+              o.value = c; o.textContent = c; compSelect.appendChild(o);
+            });
+          } else {
+            console.warn('No companies returned from /historical_data', j);
+          }
+        }).catch(e => console.error('Failed to load historical companies:', e));
+
+      compSelect.addEventListener('change', (ev) => {
+        const company = ev.target.value;
+        if (!company) return;
+        fetch('/historical_data?company=' + encodeURIComponent(company))
+          .then(r => r.json())
+          .then(d => {
+            if (d.error) {
+              console.error('Historical error:', d);
+              return;
+            }
+
+            // d should have: x, AI_Revenue_USD_Mn, AI_Revenue_Growth_%, Stock_Impact_%
+            const labels = d.x || [];
+            const revenue = safeSeries(d, 'AI_Revenue_USD_Mn') || [];
+            const growth = safeSeries(d, 'AI_Revenue_Growth_%') || [];      // use bracket name
+            const impact = safeSeries(d, 'Stock_Impact_%') || [];
+
+            // destroy previous chart if exists
+            if (histChart) {
+              try { histChart.destroy(); } catch(e) { console.warn(e); }
+            }
+            try {
+              histChart = new Chart(histCanvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                  labels: labels,
+                  datasets: [
+                    { label: 'AI Revenue (USD Mn)', data: revenue, yAxisID: 'y1', borderColor: '#37a2eb', tension:0.2, pointRadius: 2, fill:false },
+                    { label: 'AI Growth (%)', data: growth, yAxisID: 'y2', borderColor: '#9bd8ff', tension:0.2, pointRadius: 2, fill:false },
+                    { label: 'Stock Impact (%)', data: impact, yAxisID: 'y1', borderColor: '#0b74de', tension:0.2, pointRadius: 2, fill:false }
+                  ]
+                },
+                options: {
+                  interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                  plugins: { legend: { position: 'bottom' } },
+                  scales: {
+                    x: { display: true },
+                    y1: { type: 'linear', display: true, position: 'left', title: { display:true, text:'Revenue / Impact' } },
+                    y2: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display:true, text:'Growth %' } }
+                  }
+                }
+              });
+            } catch (err) {
+              console.error('Failed to render historical chart', err);
+            }
+          }).catch(e => console.error('Fetch historical data failed', e));
+      });
+    })();
+  </script>
+</body>
+</html>
